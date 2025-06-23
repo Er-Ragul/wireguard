@@ -1,7 +1,9 @@
 const express = require('express');
 const jsonServer = require('json-server');
 const app = express();
+const fs = require('fs');
 const path = require('path');
+const QRCode = require('qrcode');
 let { genKey, startServer, addPeer, removePeer, managePeer, resetServer } = require('./middleware/commands');
 
 const router = jsonServer.router(path.join(__dirname, 'db', 'base.json'));
@@ -37,6 +39,52 @@ let reuseCheck = (req, res, next) => {
     catch(err){
         console.log('Error at line no. 238 - ', err)
         res.status(500).json({ status: 'failed', message: 'Internal server error' });
+    }
+}
+
+async function createQr(req, res, next) {
+    try{
+        const server = db.get('peers').find({ id: '10.0.0.1' }).value();
+        const client = db.get('peers').find({ id: req.body.address }).value();
+        
+        let clientKey = client['private']
+        let serverKey = server['public']
+    
+    let template = `[Interface]
+PrivateKey = ${clientKey}
+Address = ${req.body.address}/24
+
+[Peer]
+PublicKey = ${serverKey}
+AllowedIPs = 0.0.0.0/0,::/0
+PersistentKeepalive = 25
+Endpoint = ${process.env.SERVERIP}:51820`
+
+        console.log(template);
+        
+        QRCode.toFile(`qrcode/${req.body.address}.png`, template, function (err) {
+            if(err) {
+                console.log('Error at line no. 155 - ', err)
+                res.status(500).json({status: 'failed', message: 'Failed to create QR'})
+            }
+            
+            const fileData = fs.readFileSync(`qrcode/${req.body.address}.png`);
+
+            const base64String = fileData.toString('base64');
+
+            const ext = path.extname(`qrcode/${req.body.address}.png`).substring(1);
+            const mimeType = `image/${ext}`;
+
+            req.qrcode = `data:${mimeType};base64,${base64String}`
+
+            console.log('Success at line no. 168 - QR generated')
+
+            next()
+        });
+    }
+    catch(err){
+        console.log('Error at line no. 174 - ', err)
+        res.status(500).json({status: 'failed', message: 'Failed to create QR'})
     }
 }
 
@@ -95,6 +143,11 @@ app.get('/read', (req, res) => {
     const peers = db.get('peers').value();
     res.status(200).json({exec: 'success', peers })
 });
+
+app.post('/qr', createQr, (req, res) => {
+    res.status(200).json({exec: 'success', qr: req.qrcode })
+    //res.status(200).sendFile(path.join(__dirname, 'qrcode', `${req.body.address}.png`))
+})
 
 app.listen(process.env.PORT || 3000, () => {
     console.log('Wireguard API Server Running on Port:', 3000);

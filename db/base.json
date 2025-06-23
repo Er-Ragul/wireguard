@@ -1,7 +1,22 @@
 {
   "ip": [
-    "10.0.0.2"
+    "10.0.0.3"
   ],
   "reuse": [],
-  "peers": []
+  "peers": [
+    {
+      "id": "10.0.0.1",
+      "ip": "10.0.0.1",
+      "name": "server",
+      "public": "CAPTuRQ9noKsgnIGhnVe4mXyS8ehmE06IhnnyqL+WH0=",
+      "private": "mMHGwB5GxYYv52fP/+vW7kriZrFJXcePVG9rwMqWZmE="
+    },
+    {
+      "id": "10.0.0.2",
+      "ip": "10.0.0.2",
+      "name": "Ragul",
+      "public": "WlSOOxwLeXFeMjkJ9OCKYKA7h5r0sGqINxc7doJEqTU=",
+      "private": "4PdBEVefX0Nmx9qMYJl/g0fj7zaTdDD2C72APF40mmI="
+    }
+  ]
 }
