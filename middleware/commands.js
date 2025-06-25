@@ -14,11 +14,11 @@ let genKey = (req, res, next) => {
     })
     .then((key) => {
         req.key = key
-        console.log('Generated private and public key -- [15]');
+        console.log('Generated private and public key -- [17]');
         next()
     })
     .catch((err) => {
-        console.log('Error at line no. 24 [middleware] - ', err)
+        console.log('Error at line no. 21 [middleware] - ', err)
         res.status(500).json({ error: err });
     })
 }
@@ -33,13 +33,12 @@ Address = 10.0.0.1/24
 ListenPort = 51820
 
 # Enable IP forwarding and set up NAT using iptables
-PostUp = sysctl -w net.ipv4.ip_forward=1
-PostUp = iptables -t nat -A POSTROUTING -o ens33 -j MASQUERADE
+PostUp = iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
 PostUp = iptables -A FORWARD -i wg0 -j ACCEPT
 PostUp = iptables -A FORWARD -o wg0 -j ACCEPT
 
 # Clean up iptables rules on interface shutdown
-PostDown = iptables -t nat -D POSTROUTING -o ens33 -j MASQUERADE
+PostDown = iptables -t nat -D POSTROUTING -o eth0 -j MASQUERADE
 PostDown = iptables -D FORWARD -i wg0 -j ACCEPT
 PostDown = iptables -D FORWARD -o wg0 -j ACCEPT`
 
@@ -63,7 +62,7 @@ PostDown = iptables -D FORWARD -o wg0 -j ACCEPT`
         next()
     })
     .catch((err) => {
-        console.log('Error -- [66] - ', err)
+        console.log('Error -- [65] - ', err)
         res.status(500).json({ error: err });
     })
 }
@@ -81,11 +80,11 @@ let addPeer = (req, res, next) => {
         }
     })
     .then(() => {
-        console.log('Peer added successfully -- [85]')
+        console.log('Peer added successfully -- [83]')
         next()
     })
     .catch((err) => {
-        console.log('Error at line no. 47 [middleware] - ', err)
+        console.log('Error at line no. 87 [middleware] - ', err)
         res.status(500).json({ error: err });
     })
 }
@@ -99,11 +98,11 @@ let removePeer = (req, res, next) => {
         resolve()
     })
     .then(() => {
-        console.log('Peer removed successfully - [102]')
+        console.log('Peer removed successfully - [101]')
         next()
     })
     .catch((err) => {
-        console.log('Error at line no. 147 [middleware] - ', err)
+        console.log('Error at line no. 105 [middleware] - ', err)
         res.status(500).json({ error: err });
     })
 }
@@ -119,11 +118,11 @@ function managePeer(req, res, next){
             resolve()
         })
         .then(() => {
-            console.log('Success at line no. 108 [middleware] - IP unblocked')
+            console.log('Success at line no. 121 [middleware] - IP unblocked')
             next()
         })
         .catch((err) => {
-            console.log('Error at line no. 111 [middleware] - ', err)
+            console.log('Error at line no. 125 [middleware] - ', err)
             res.status(500).json({ error: err });
         })
     }
@@ -135,11 +134,11 @@ function managePeer(req, res, next){
             resolve()
         })
         .then(() => {
-            console.log('Success at line no. 124 [middleware] - IP blocked')
+            console.log('Success at line no. 137 [middleware] - IP blocked')
             next()
         })
         .catch((err) => {
-            console.log('Error at line no. 128 [middleware] - ', err)
+            console.log('Error at line no. 141 [middleware] - ', err)
             res.status(500).json({ error: err });
         })
     }
@@ -159,11 +158,11 @@ function resetServer(res, req, next){
         }
     })
     .then(() => {
-        console.log('Success at line no. 168 [middleware] - Hard reset')
+        console.log('Success at line no. 161 [middleware] - Hard reset')
         next()
     })
     .catch((err) => {
-        console.log('Error at line no. 172 [middleware] - ', err)
+        console.log('Error at line no. 165 [middleware] - ', err)
         res.status(500).json({ error: err });
     })
 }
