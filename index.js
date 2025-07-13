@@ -1,15 +1,17 @@
 const express = require('express');
 const jsonServer = require('json-server');
 const app = express();
+const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
 const QRCode = require('qrcode');
+
 let { genKey, startServer, addPeer, removePeer, managePeer, resetServer } = require('./middleware/commands');
 
 const router = jsonServer.router(path.join(__dirname, 'db', 'base.json'));
-
 const db = router.db;
 
+app.use(cors());
 app.use(express.json());
 
 // Use json-server's router at /db
@@ -29,7 +31,7 @@ let reuseCheck = (req, res, next) => {
             let address = db.get('ip').value()
             req.address = address[0]
             let allocated = address[0].split('.')
-            if(parseInt(allocated[3]) <= 255){
+            if(parseInt(allocated[3]) <= 254){
                 allocated = `${allocated[0]}.${allocated[1]}.${allocated[2]}.${parseInt(allocated[3])+1}`
                 db.set('ip', [allocated]).write()
                 next()
@@ -77,7 +79,7 @@ Endpoint = ${process.env.SERVERIP}:51820`
 
             req.qrcode = `data:${mimeType};base64,${base64String}`
 
-            console.log('Success at line no. 168 - QR generated')
+            console.log('Success at line no. 82 - QR generated')
 
             next()
         });
@@ -88,11 +90,39 @@ Endpoint = ${process.env.SERVERIP}:51820`
     }
 }
 
+async function createConf(req, res, next) {
+    try{
+        const server = db.get('peers').find({ id: '10.0.0.1' }).value();
+        const client = db.get('peers').find({ id: req.body.address }).value();
+        
+        let clientKey = client['private']
+        let serverKey = server['public']
+    
+    let template = `[Interface]
+PrivateKey = ${clientKey}
+Address = ${req.body.address}/24
+
+[Peer]
+PublicKey = ${serverKey}
+AllowedIPs = 0.0.0.0/0,::/0
+PersistentKeepalive = 25
+Endpoint = ${process.env.SERVERIP}:51820`
+
+        console.log(template);
+        fs.writeFileSync(`confs/${req.body.address}.conf`, template);
+        next()
+    }
+    catch(err){
+        console.log('Error at line no. 134 - ', err)
+        res.status(500).json({status: 'failed', message: 'Failed to create Conf file'})
+    }
+}
+
 app.get('/', (req, res) => {
     res.status(200).send('Server online')
 })
 
-app.get('/start', genKey, startServer, (req, res) => {
+app.get('/vpn/start', genKey, startServer, (req, res) => {
     const newPeer = {
         id: '10.0.0.1',
         ip: '10.0.0.1',
@@ -101,24 +131,26 @@ app.get('/start', genKey, startServer, (req, res) => {
         private: req.key.private
     }
 
+
     db.get('peers').push(newPeer).write();
     res.status(201).json({exec: 'success'})
 })
 
-app.post('/create', genKey, reuseCheck, addPeer, (req, res) => {
+app.post('/vpn/create', genKey, reuseCheck, addPeer, (req, res) => {
     const newPeer = {
         id: req.address,
         ip: req.address,
         name: req.body.name,
         public: req.key.public,
-        private: req.key.private
+        private: req.key.private,
+        allow: true
     }
 
     db.get('peers').push(newPeer).write();
     res.status(200).json({exec: 'success', address: req.address, key: req.key })
 })
 
-app.post('/delete', removePeer, (req, res) => {
+app.post('/vpn/delete', removePeer, (req, res) => {
     const id = req.body.address
     const peer = db.get('peers').find({ id }).value();
 
@@ -128,25 +160,31 @@ app.post('/delete', removePeer, (req, res) => {
     res.status(200).json({exec: 'success', address: req.address, key: req.body.peer })
 })
 
-app.post('/update', managePeer, (req, res) => {
+app.post('/vpn/update', managePeer, (req, res) => {
+    db.get('peers').find({ id: req.body.address }).assign({ allow: req.body.cmd }).write();
     res.status(200).json({exec: 'success', key: req.body.peer })
 })
 
-app.get('/reset', resetServer, (req, res) => {
+app.get('/vpn/reset', resetServer, (req, res) => {
     db.set('ip', ["10.0.0.2"]).write();
     db.set('reuse', []).write();
     db.set('peers', []).write();
     res.status(200).json({exec: 'success'})
 })
 
-app.get('/read', (req, res) => {
+app.get('/vpn/read', (req, res) => {
     const peers = db.get('peers').value();
     res.status(200).json({exec: 'success', peers })
 });
 
-app.post('/qr', createQr, (req, res) => {
+app.post('/vpn/qr', createQr, (req, res) => {
     res.status(200).json({exec: 'success', qr: req.qrcode })
     //res.status(200).sendFile(path.join(__dirname, 'qrcode', `${req.body.address}.png`))
+})
+
+app.post('/vpn/conf', createConf, (req, res) => {
+    //res.status(200).sendFile(path.join(__dirname, 'confs', `${req.body.address}.conf`))
+    res.status(200).download(path.join(__dirname, 'confs', `${req.body.address}.conf`))
 })
 
 app.listen(process.env.PORT || 3000, () => {

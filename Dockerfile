@@ -18,7 +18,7 @@ RUN mkdir -p /etc/wireguard
 WORKDIR /app
 
 # Create directory for qrcode
-RUN mkdir qrcode
+RUN mkdir qrcode confs
 
 # Copy all files
 COPY . .
@@ -28,9 +28,6 @@ RUN npm install
 
 # Expose
 EXPOSE 3000 51820/udp
-
-# Make entrypoint executable
-RUN chmod +x entrypoint.sh
 
 # Run a the server
 ENTRYPOINT ["node", "index.js"]
