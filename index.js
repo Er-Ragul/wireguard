@@ -1,7 +1,9 @@
 const express = require('express');
+const session = require('express-session');
 const jsonServer = require('json-server');
 const app = express();
 const cors = require('cors');
+const bcrypt = require('bcrypt');
 const fs = require('fs');
 const path = require('path');
 const QRCode = require('qrcode');
@@ -11,8 +13,22 @@ let { genKey, startServer, addPeer, removePeer, managePeer, resetServer } = requ
 const router = jsonServer.router(path.join(__dirname, 'db', 'base.json'));
 const db = router.db;
 
-app.use(cors());
+app.use(cors({
+  origin: 'http://192.168.31.218:5173',
+  credentials: true
+}));
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(session({
+  secret: 'ReBeDbU01072025',
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    httpOnly: true,
+    secure: false, // set to true in production with HTTPS
+    maxAge: 1000 * 60 * 60 * 24  // 1 day
+  }
+}));
 
 // Use json-server's router at /db
 //app.use('/db', router);
@@ -118,11 +134,52 @@ Endpoint = ${process.env.SERVERIP}:51820`
     }
 }
 
+function verify(req, res, next){
+    if (req.session.user) {
+        //res.json({ authenticated: true, user: req.session.user });
+        next()
+    } else {
+        res.json({ authenticated: false });
+    }
+}
+
 app.get('/', (req, res) => {
     res.status(200).send('Server online')
 })
 
-app.get('/vpn/start', genKey, startServer, (req, res) => {
+app.post('/vpn/auth', async(req, res) => {
+    const { password } = req.body;
+    let storedHash = process.env.PASSWORD
+
+    const isMatch = await bcrypt.compare(password, storedHash);
+    if (isMatch) {
+        console.log('✅ Password is correct');
+        req.session.user = { id: '123456' };
+        res.status(200).json({ authenticated: true, message: 'Logged in successfully' });
+    } else {
+        console.log('❌ Password is incorrect');
+        res.status(401).json({ message: 'Invalid credentials' });
+    }
+});
+
+app.get('/vpn/verify', (req, res) => {
+    if(req.session.user) {
+        res.json({ authenticated: true, user: req.session.user });
+    } 
+    else{
+        res.json({ authenticated: false });
+    }
+})
+
+app.post('/vpn/logout', (req, res) => {
+    req.session.destroy(err => {
+    if (err) return res.status(500).send('Logout failed');
+        res.clearCookie('connect.sid');
+        res.send('Logged out');
+    });
+});
+
+app.get('/vpn/start', verify, genKey, startServer, (req, res) => {
     const newPeer = {
         id: '10.0.0.1',
         ip: '10.0.0.1',
@@ -136,7 +193,7 @@ app.get('/vpn/start', genKey, startServer, (req, res) => {
     res.status(201).json({exec: 'success'})
 })
 
-app.post('/vpn/create', genKey, reuseCheck, addPeer, (req, res) => {
+app.post('/vpn/create', verify, genKey, reuseCheck, addPeer, (req, res) => {
     const newPeer = {
         id: req.address,
         ip: req.address,
@@ -150,7 +207,7 @@ app.post('/vpn/create', genKey, reuseCheck, addPeer, (req, res) => {
     res.status(200).json({exec: 'success', address: req.address, key: req.key })
 })
 
-app.post('/vpn/delete', removePeer, (req, res) => {
+app.post('/vpn/delete', verify, removePeer, (req, res) => {
     const id = req.body.address
     const peer = db.get('peers').find({ id }).value();
 
@@ -160,29 +217,29 @@ app.post('/vpn/delete', removePeer, (req, res) => {
     res.status(200).json({exec: 'success', address: req.address, key: req.body.peer })
 })
 
-app.post('/vpn/update', managePeer, (req, res) => {
+app.post('/vpn/update', verify, managePeer, (req, res) => {
     db.get('peers').find({ id: req.body.address }).assign({ allow: req.body.cmd }).write();
     res.status(200).json({exec: 'success', key: req.body.peer })
 })
 
-app.get('/vpn/reset', resetServer, (req, res) => {
+app.get('/vpn/reset', verify, resetServer, (req, res) => {
     db.set('ip', ["10.0.0.2"]).write();
     db.set('reuse', []).write();
     db.set('peers', []).write();
     res.status(200).json({exec: 'success'})
 })
 
-app.get('/vpn/read', (req, res) => {
+app.get('/vpn/read', verify, (req, res) => {
     const peers = db.get('peers').value();
     res.status(200).json({exec: 'success', peers })
 });
 
-app.post('/vpn/qr', createQr, (req, res) => {
+app.post('/vpn/qr', verify, createQr, (req, res) => {
     res.status(200).json({exec: 'success', qr: req.qrcode })
     //res.status(200).sendFile(path.join(__dirname, 'qrcode', `${req.body.address}.png`))
 })
 
-app.post('/vpn/conf', createConf, (req, res) => {
+app.post('/vpn/conf', verify, createConf, (req, res) => {
     //res.status(200).sendFile(path.join(__dirname, 'confs', `${req.body.address}.conf`))
     res.status(200).download(path.join(__dirname, 'confs', `${req.body.address}.conf`))
 })
