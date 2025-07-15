@@ -13,6 +13,8 @@ let { genKey, startServer, addPeer, removePeer, managePeer, resetServer } = requ
 const router = jsonServer.router(path.join(__dirname, 'db', 'base.json'));
 const db = router.db;
 
+app.use(express.static(path.join(__dirname, 'dist')));
+
 app.use(cors({
   origin: 'http://192.168.31.218:5173',
   credentials: true
@@ -136,20 +138,15 @@ Endpoint = ${process.env.SERVERIP}:51820`
 
 function verify(req, res, next){
     if (req.session.user) {
-        //res.json({ authenticated: true, user: req.session.user });
         next()
     } else {
         res.json({ authenticated: false });
     }
 }
 
-app.get('/', (req, res) => {
-    res.status(200).send('Server online')
-})
-
 app.post('/vpn/auth', async(req, res) => {
     const { password } = req.body;
-    let storedHash = process.env.PASSWORD
+    let storedHash = process.env.PASSWORD || "$2a$12$99gPlVjhHEPCrk4cFqVrvub0BqkHxItP4TcP1LU6HzAvI4QiD.4yu"
 
     const isMatch = await bcrypt.compare(password, storedHash);
     if (isMatch) {
@@ -173,9 +170,11 @@ app.get('/vpn/verify', (req, res) => {
 
 app.post('/vpn/logout', (req, res) => {
     req.session.destroy(err => {
-    if (err) return res.status(500).send('Logout failed');
+        if(err){
+            return res.status(500).send('Logout failed');
+        }
         res.clearCookie('connect.sid');
-        res.send('Logged out');
+        res.status(200).json({message: 'Logged out successfully'})
     });
 });
 
@@ -243,6 +242,10 @@ app.post('/vpn/conf', verify, createConf, (req, res) => {
     //res.status(200).sendFile(path.join(__dirname, 'confs', `${req.body.address}.conf`))
     res.status(200).download(path.join(__dirname, 'confs', `${req.body.address}.conf`))
 })
+
+app.get(/(.*)/, (req, res) => {
+  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+});
 
 app.listen(process.env.PORT || 3000, () => {
     console.log('Wireguard API Server Running on Port:', 3000);
