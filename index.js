@@ -18,7 +18,7 @@ app.use(express.static(path.join(__dirname, 'dist')));
 
 app.use(cookieParser())
 app.use(cors({
-  origin: 'http://192.168.31.78:5173',
+  origin: '/',
   credentials: true,
   methods: ['GET, HEAD, PUT, PATCH, POST, DELETE'],
 }));
