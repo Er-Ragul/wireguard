@@ -1,5 +1,6 @@
 const express = require('express');
-const session = require('express-session');
+const jwt = require('jsonwebtoken');
+const cookieParser = require('cookie-parser');
 const jsonServer = require('json-server');
 const app = express();
 const cors = require('cors');
@@ -15,22 +16,15 @@ const db = router.db;
 
 app.use(express.static(path.join(__dirname, 'dist')));
 
+app.use(cookieParser())
 app.use(cors({
-  origin: 'http://192.168.31.218:5173',
-  credentials: true
+  origin: 'http://192.168.31.78:5173',
+  credentials: true,
+  methods: ['GET, HEAD, PUT, PATCH, POST, DELETE'],
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(session({
-  secret: 'ReBeDbU01072025',
-  resave: false,
-  saveUninitialized: false,
-  cookie: {
-    httpOnly: true,
-    secure: false, // set to true in production with HTTPS
-    maxAge: 1000 * 60 * 60 * 24  // 1 day
-  }
-}));
+
 
 // Use json-server's router at /db
 //app.use('/db', router);
@@ -137,11 +131,23 @@ Endpoint = ${process.env.SERVERIP}:51820`
 }
 
 function verify(req, res, next){
-    if (req.session.user) {
+    // const authHeader = req.headers.authorization;
+    // if (!authHeader) return res.sendStatus(401);
+
+    // const token = authHeader.split(' ')[1];
+
+    const token = req.cookies.token;
+
+    if (!token) return res.sendStatus(401);
+
+    jwt.verify(token, 'SECRET_KEY', (err, decode) => {
+        if(err){
+            console.log(err);
+            return res.sendStatus(403);
+        }
+        req.user = decode
         next()
-    } else {
-        res.json({ authenticated: false });
-    }
+    });
 }
 
 app.post('/vpn/auth', async(req, res) => {
@@ -151,8 +157,15 @@ app.post('/vpn/auth', async(req, res) => {
     const isMatch = await bcrypt.compare(password, storedHash);
     if (isMatch) {
         console.log('✅ Password is correct');
-        req.session.user = { id: '123456' };
-        res.status(200).json({ authenticated: true, message: 'Logged in successfully' });
+        const token = jwt.sign({ username: "admin" }, 'SECRET_KEY', { expiresIn: '1h' });
+
+        res.cookie('token', token, { 
+            httpOnly: true,
+            secure: false,
+            maxAge: 1000 * 60 * 60 * 24  // 1 day
+        })
+
+        res.status(200).json({ authenticated: true, token, message: 'Logged in successfully' });
     } else {
         console.log('❌ Password is incorrect');
         res.status(401).json({ message: 'Invalid credentials' });
@@ -160,22 +173,37 @@ app.post('/vpn/auth', async(req, res) => {
 });
 
 app.get('/vpn/verify', (req, res) => {
-    if(req.session.user) {
-        res.json({ authenticated: true, user: req.session.user });
-    } 
-    else{
-        res.json({ authenticated: false });
-    }
+    // const authHeader = req.headers.authorization;
+    // if (!authHeader) return res.sendStatus(401);
+
+    // const token = authHeader.split(' ')[1];
+
+    const token = req.cookies.token;
+
+    if (!token) return res.sendStatus(401);
+
+    jwt.verify(token, 'SECRET_KEY', (err, username) => {
+        if(err){
+            console.log(err);
+            return res.sendStatus(403);
+        }
+
+        res.json({ authenticated: true });
+    });
 })
 
 app.post('/vpn/logout', (req, res) => {
-    req.session.destroy(err => {
-        if(err){
-            return res.status(500).send('Logout failed');
-        }
-        res.clearCookie('connect.sid');
-        res.status(200).json({message: 'Logged out successfully'})
-    });
+    const token = req.cookies.token;
+
+    if (!token) return res.sendStatus(401);
+
+    res.clearCookie('token', token, {
+        httpOnly: true,
+        secure: false,
+        maxAge: 1000 * 60 * 60 * 24  // 1 day
+    })
+
+    res.status(200).json({ authenticated: false })    
 });
 
 app.get('/vpn/start', verify, genKey, startServer, (req, res) => {
@@ -239,7 +267,6 @@ app.post('/vpn/qr', verify, createQr, (req, res) => {
 })
 
 app.post('/vpn/conf', verify, createConf, (req, res) => {
-    //res.status(200).sendFile(path.join(__dirname, 'confs', `${req.body.address}.conf`))
     res.status(200).download(path.join(__dirname, 'confs', `${req.body.address}.conf`))
 })
 
@@ -247,6 +274,6 @@ app.get(/(.*)/, (req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
-app.listen(process.env.PORT || 3000, () => {
+app.listen(process.env.PORT || 3000, '0.0.0.0', () => {
     console.log('Wireguard API Server Running on Port:', 3000);
 });
