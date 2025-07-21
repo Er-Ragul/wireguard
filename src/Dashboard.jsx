@@ -2,12 +2,11 @@ import React, { useState, useEffect } from "react"
 import axios from "axios"
 import { useNavigate } from 'react-router-dom';
 
-let url = "/"
-
 const api = axios.create({
-  baseURL: url,
+  baseURL: "http://localhost:3000",  // change it
   withCredentials: true,
 });
+
 
 function Dashboard(){
 
@@ -24,16 +23,22 @@ function Dashboard(){
         verify()
     }, [])
 
-    async function verify() {
-      const res = await api.get(`/vpn/verify`);
-      if (res.data.authenticated) {
-        console.log('Authorized');
-        setLoaded(true)
-        read()
-      } else {
-        console.log('Error');
-        navigate("/")
-      }
+    function verify() {
+        try{
+            api.get(`/vpn/verify`)
+            .then(response => {
+                console.log('Authorized');
+                setLoaded(true)
+                read()
+            })
+            .catch(error => {
+                console.log('Error');
+                navigate("/")
+            })
+        }
+        catch(error){
+            console.log('Unable to establish connection', error);
+        }
     }
 
     function start(){
@@ -78,6 +83,7 @@ function Dashboard(){
             .then((response) => {
                 read()
                 setModal(false)
+                console.log(response.data);
             })
             .catch((error) => {
                 console.log(error);
@@ -139,7 +145,14 @@ function Dashboard(){
 
     async function getconf(client, index){
         try{
-            const response = await api.post(`/vpn/conf`, { address: client.ip }, { responseType: 'blob' });
+            const response = await api.post(`/vpn/conf`,
+                { 
+                    address: client.ip 
+                },
+                {
+                    responseType: 'blob'
+                }
+            );
 
             const blob = new Blob([response.data]);
             const downloadUrl = window.URL.createObjectURL(blob);
